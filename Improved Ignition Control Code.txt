@@ -1,0 +1,434 @@
+{Project Skylark Ignition Control Program}
+CON
+        _clkmode = xtal1 + pll16x                                               'Standard clock mode * crystal frequency = 80 MHz
+        _xinfreq = 5_000_000
+PUB Main
+        cognew(@Cycle, 0)                  'Mock Trigger
+        cognew(@ReadCmP, 0)                'CkP2 Pulse Generation
+        cognew(@Trigg, 0)                  'Triggering Program   (Creates the trig/ cond pulses. Will use on PropA)
+        cognew(@Coil, 0)                   'Ignition Control Code                                                       
+DAT
+''''''''''''''''\/ ignition control \/'''''''''''''''''''''''
+        org 0
+
+Coil    mov             dira, coils
+
+Begin   waitpeq         inputs, inputs
+        mov             count, #$1
+        waitpne         inputs, inputs
+
+Load    'mov             delayA, conA
+        'mov             dwellA, dwell
+        
+Running waitpeq         CkP, CkP                'waiting for CkP2 (constant pulse) input to be high
+        cmp             count, #1  wz           'compare if #1 pulse
+        if_z            mov  delayA, count      'if so, move the tick count into delayA
+        if_z            add  delayA, conA       'then add conA (number of CkP2 ticks until start of dwell) to tick count
+        add             count, #1               ''''''''''
+        cmp             count, #20  wz
+        if_z            mov  delayB, count
+        if_z            add  delayB, conA       ''''''''''
+        cmp             count, #40  wz
+        if_z            mov  delayC, count
+        if_z            add  delayC, conA       ''''''''''
+        cmp             count, #60  wz
+        if_z            mov  delayD, count
+        if_z            add  delayD, conA       ''''''''''
+        cmp             count, #80  wz
+        if_z            mov  delayE, count
+        if_z            add  delayE, conA       ''''''''''
+        cmp             count, #100  wz
+        if_z            mov  delayF, count
+        if_z            add  delayF, conA       ''''''''''
+
+Stable  mov             inCheck, inputs         'this resets counter every cycle
+        and             inCheck, ina            'protects against bad signal
+        cmp             inCheck, inputs             
+        cmp             count, #121  wz, wc 
+        if_z_or_nc      mov  count, #1
+
+CompA   cmp             switch, delayD  wz, wc  'accounts for tick count resetting back to 1 each loop
+        if_nz_and_c     sub  delayD, switch
+        cmp             switch, delayE  wz, wc
+        if_nz_and_c     sub  delayE, switch
+        cmp             switch, delayF  wz, wc
+        if_nz_and_c     sub  delayF, switch
+        
+CondA   cmp             delayA, count  wz       'start of dwell time, check if CkP2 tick count is equal to value set previously
+        if_z            mov  dwellA, count      'if equal, move the current CkP2 count into dwellA
+        if_z            add  dwellA, dwell      'then add the dwell amount (number of CkP2 ticks) to dwellA
+        if_z            xor  outa, coilA        'toggle coil control pin HIGH
+        cmp             delayB, count  wz
+        if_z            mov  dwellB, count
+        if_z            add  dwellB, dwell
+        if_z            xor  outa, coilB        ''''''''''
+        cmp             delayC, count  wz
+        if_z            mov  dwellC, count
+        if_z            add  dwellC, dwell
+        if_z            xor  outa, coilC        ''''''''''
+        cmp             delayD, count  wz
+        if_z            mov  dwellD, count
+        if_z            add  dwellD, dwell
+        if_z            xor  outa, coilD        ''''''''''
+        cmp             delayE, count  wz
+        if_z            mov  dwellE, count
+        if_z            add  dwellE, dwell
+        if_z            xor  outa, coilE        ''''''''''
+        cmp             delayF, count  wz
+        if_z            mov  dwellF, count
+        if_z            add  dwellF, dwell
+        if_z            xor  outa, coilF        ''''''''''
+
+CompB   cmp             switch, dwellD  wz, wc
+        if_nz_and_c     sub  dwellD, switch
+        cmp             switch, dwellE  wz, wc
+        if_nz_and_c     sub  dwellE, switch
+        cmp             switch, dwellF  wz, wc
+        if_nz_and_c     sub  dwellF, switch
+
+DwellQ  cmp             dwellA, count  wz       'Check if last dwell tick has been reached
+        if_z            mov  tB, cnt            'if so, move current system counter into tB
+        if_z            add  tB, tA             'add tA (time accounting for number of degrees after tick to achieve proper advance
+        if_z            waitcnt  tB, tA         'pause until tA has been reached
+        if_z            xor  outa, coilA        'once tA has been reached, turn off output pin, which ends dwell, thus initiating spark
+        cmp             dwellB, count  wz       'same as above, just controlling a different pin
+        if_z            mov  tB, cnt
+        if_z            add  tB, tA
+        if_z            waitcnt  tB, tA
+        if_z            xor  outa, coilB        ''''''''''
+        cmp             dwellC, count  wz
+        if_z            mov  tB, cnt
+        if_z            add  tB, tA
+        if_z            waitcnt  tB, tA
+        if_z            xor  outa, coilC        ''''''''''
+        cmp             dwellD, count  wz
+        if_z            mov  tB, cnt
+        if_z            add  tB, tA
+        if_z            waitcnt  tB, tA
+        if_z            xor  outa, coilD        ''''''''''
+        cmp             dwellE, count  wz
+        if_z            mov  tB, cnt
+        if_z            add  tB, tA
+        if_z            waitcnt  tB, tA
+        if_z            xor  outa, coilE        ''''''''''
+        cmp             dwellF, count  wz
+        if_z            mov  tB, cnt
+        if_z            add  tB, tA
+        if_z            waitcnt  tB, tA
+        if_z            xor  outa, coilF        ''''''''''                               
+        waitpne         CkP, CkP
+        jmp             #Load                  
+        
+
+inputs        long      $1800                   'input pins (con, CkP2)
+CkP           long      $800                    'constant crank signal input pin
+conA          long      17                      'delay time (CkP2) until start of dwell
+dwell         long      4                       'dwell time (CkP2)
+tA            long      100                     'time after CkP2 tick for 1 degree resolution
+switch        long      120
+coils         long      $FF0000                 'coil output pins
+coilA         long      $010000                 '
+coilB         long      $020000                 '
+coilC         long      $040000                 '
+coilD         long      $080000                 '
+coilE         long      $100000                 '
+coilF         long      $200000                 '
+coilG         long      $400000                 '
+coilH         long      $800000                 '   
+count         long      $1
+
+tB            res 1
+inCheck       res 1
+crankCheck    res 1
+event         res 1
+
+delayA        res 1
+delayB        res 1
+delayC        res 1
+delayD        res 1
+delayE        res 1
+delayF        res 1
+delayG        res 1
+delayH        res 1
+ 
+dwellA        res 1
+dwellB        res 1
+dwellC        res 1
+dwellD        res 1
+dwellE        res 1
+dwellF        res 1
+dwellG        res 1
+dwellH        res 1
+''''''''''''''''\/ constant pulse generation \/''''''''''''''
+        org 0
+
+ReadCmP waitpeq         camSignal, camSignal
+        waitpne         camSignal, camSignal
+        mov             dira, constantA
+        mov             tick, #0
+        
+rStart  waitpeq         crankSignal, crankSignal        'first crank tick
+        xor             outa, constants                 'activates constant pulse pin
+        'cmp             tick, #$0  wz
+        'if_z            xor outa, constantA
+        'if_nz           xor outa, constants
+        mov             pulseStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        'cmp             tick, #$1  wz
+        'if_z            xor outa, constantA
+        'if_nz           xor outa, constants
+        mov             pulseTime, cnt
+        sub             pulseTime, pulseStart
+        cmp             tick, #56  wz
+        if_z            jmp  #DT
+        jmp             #rStart
+
+DT      waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtTotal, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseStart, cnt
+        sub             dtTotal, dtStart
+
+Fill    add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        mov             pulseStart, cnt
+        add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        'mov             tick, #0
+        jmp             #rStartB
+
+rStartB waitpeq         crankSignal, crankSignal        'first crank tick
+        xor             outa, constants                  'activates constant pulse pin
+        mov             pulseStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseTime, cnt
+        sub             pulseTime, pulseStart
+        cmp             tick, #116  wz
+        if_z            jmp  #DTb
+        jmp             #rStartB
+
+DTb     waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtTotal, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseStart, cnt
+        sub             dtTotal, dtStart
+
+FillB   add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        mov             pulseStart, cnt
+        add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constantA
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constantA
+        mov             tick, #0
+        jmp             #rStart
+         
+
+camSignal     long      $200
+crankSignal   long      $100
+constants     long      $800
+constantA     long      $1800  
+
+pulseStart    res 1
+onPulse       res 1
+dtStart       res 1
+dtTotal       res 1
+pulseTime     res 1
+tick          res 1
+'''''''''''''''''''''\/Triggering Program\/'''''''''''''''''''
+   
+        org 0
+
+Trigg   mov             dira, output
+
+ListenX mov             visual, all
+        and             visual, ina
+        cmp             visual, camsA wz
+        if_z            waitpne  camsA, camsA
+        if_z            jmp  #A
+        cmp             visual, camsB wz
+        if_z            waitpne  camsB, camsB
+        if_z            jmp  #D
+        cmp             visual, crankS wz
+        if_z            waitpne  crankS, crankS
+        if_z            add  tickA, #1
+        if_z            jmp  #B
+        jmp             #ListenX 
+
+A       mov             tickA, #0
+        xor             outa, output
+        mov             timeY, cnt
+        add             timeY, trigPulse
+        waitcnt         timeY, trigPulse
+        xor             outa, output  
+        jmp             #ListenX
+        
+B       cmp             tickA, #20 wz
+        if_z            jmp  #C
+        cmp             tickA, #40 wz
+        if_z            jmp  #C 
+        'cmp             tick, #35 wz
+        'if_z            jmp  #ListenX
+        cmp             tickA, #80 wz
+        if_z            jmp  #C
+        cmp             tickA, #100 wz
+        if_z            jmp  #C   
+        'cmp             tick, #71 wz
+        'if_z            jmp  #ListenX  
+        jmp             #ListenX                                               
+
+C       xor             outa, trigs
+        mov             timeY, cnt
+        add             timeY, trigPulse
+        waitcnt         timeY, trigPulse
+        xor             outa, trigs
+        jmp             #ListenX
+
+D       mov             tickA, #60
+        xor             outa, trigs
+        mov             timeY, cnt
+        add             timeY, trigPulse
+        waitcnt         timeY, trigPulse
+        xor             outa, trigs
+        jmp             #ListenX
+
+
+output        long  $3
+trigs         long  $1
+crankS        long  $100
+camsA         long  $200     'CMP1
+camsB         long  $400     'CMP2
+all           long  $700
+trigPulse     long  1000
+
+tickA         res 1
+visual        res 1
+timeY         res 1
+''''''''''''''''\/ mock trigger \/'''''''''''''''''''''''''''
+        org 0
+        
+Cycle   mov             dira, Pin
+        mov             iter, #0
+        
+StartA  xor             outa, camA
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, camA
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        
+LoopB   'add             iter, #1
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        cmp             iter, #58  wz
+        if_z            jmp   #Empty
+        jmp             #LoopB
+
+Empty   nop
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        nop
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+
+StartB  xor             outa, camB
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, camB
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+
+LoopC   xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        cmp             iter, #118  wz
+        if_z            jmp   #EmptyA
+        jmp             #LoopC
+
+EmptyA  nop
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        nop
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        jmp             #Cycle
+
+        
+
+Pin           long  $700
+camA          long  $200
+camB          long  $400
+Pulse         long  1000       'Pulsewidth ~ Pulse*12.5               
+DelayX        long  25_000   'Delay between pulses ~ Delay*12.5 
+
+phase         res 1
+iter          res 1
+TimeX         res 1 

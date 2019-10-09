@@ -1,0 +1,213 @@
+{Project Skylark Constant Crank Pulse Program}
+CON
+        _clkmode = xtal1 + pll16x                                               'Standard clock mode * crystal frequency = 80 MHz
+        _xinfreq = 5_000_000
+PUB Main
+        cognew(@Cycle, 0)
+        cognew(@ReadCmP, 0)
+
+DAT
+''''''''''''''''\/ constant pulse generation \/''''''''''''''
+        org 0
+
+ReadCmP waitpeq         camSignal, camSignal
+        waitpne         camSignal, camSignal
+        mov             dira, constantA
+        mov             tick, #0
+        
+rStart  waitpeq         crankSignal, crankSignal        'first crank tick
+        'xor             outa, constants                 'activates constant pulse pin
+        cmp             tick, #$0  wz
+        if_z            xor outa, constantA
+        if_nz           xor outa, constants
+        mov             pulseStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        'xor             outa, constants
+        cmp             tick, #$1  wz
+        if_z            xor outa, constantA
+        if_nz           xor outa, constants
+        mov             pulseTime, cnt
+        sub             pulseTime, pulseStart
+        cmp             tick, #56  wz
+        if_z            jmp  #DT
+        jmp             #rStart
+
+DT      waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtTotal, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseStart, cnt
+        sub             dtTotal, dtStart
+
+Fill    add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        mov             pulseStart, cnt
+        add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        'mov             tick, #0
+        jmp             #rStartB
+
+rStartB waitpeq         crankSignal, crankSignal        'first crank tick
+        xor             outa, constants                  'activates constant pulse pin
+        mov             pulseStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseTime, cnt
+        sub             pulseTime, pulseStart
+        cmp             tick, #116  wz
+        if_z            jmp  #DTb
+        jmp             #rStartB
+
+DTb     waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtStart, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        waitpeq         crankSignal, crankSignal
+        xor             outa, constants
+        mov             dtTotal, cnt
+        add             tick, #1
+        waitpne         crankSignal, crankSignal
+        xor             outa, constants
+        mov             pulseStart, cnt
+        sub             dtTotal, dtStart
+
+FillB   add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        mov             pulseStart, cnt
+        add             pulseStart, dtTotal
+        waitcnt         pulseStart, dtTotal
+        xor             outa, constants
+        add             tick, #1
+        mov             onPulse, cnt
+        add             onPulse, pulseTime
+        waitcnt         onPulse, pulseTime
+        xor             outa, constants
+        mov             tick, #0
+        jmp             #rStart
+         
+
+camSignal     long      $200
+crankSignal   long      $100
+constants     long      $800
+constantA     long      $1800  
+
+pulseStart    res 1
+onPulse       res 1
+dtStart       res 1
+dtTotal       res 1
+pulseTime     res 1
+tick          res 1
+''''''''''''''''\/ mock trigger \/'''''''''''''''''''''''''''
+        org 0
+        
+Cycle   mov             dira, Pin
+        mov             iter, #0
+        
+StartA  xor             outa, camA
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, camA
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        
+LoopB   'add             iter, #1
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        cmp             iter, #58  wz
+        if_z            jmp   #Empty
+        jmp             #LoopB
+
+Empty   nop
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        nop
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+
+StartB  xor             outa, camB
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, camB
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+
+LoopC   xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        xor             outa, #$100
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        cmp             iter, #118  wz
+        if_z            jmp   #EmptyA
+        jmp             #LoopC
+
+EmptyA  nop
+        mov             TimeX, cnt
+        add             TimeX, Pulse
+        waitcnt         TimeX, Pulse
+        nop
+        mov             TimeX, cnt
+        add             TimeX, DelayX
+        waitcnt         TimeX, DelayX
+        add             iter, #1
+        jmp             #Cycle
+
+        
+
+Pin           long      $700
+camA          long      $200
+camB          long      $400
+Pulse         long      1000       'Pulsewidth ~ Pulse*12.5               
+DelayX        long      25_000   'Delay between pulses ~ Delay*12.5 
+
+phase         res 1
+iter          res 1
+TimeX         res 1 
